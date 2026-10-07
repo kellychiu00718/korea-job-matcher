@@ -1,37 +1,41 @@
 # Korea Job Matcher: A Daily AI Shortlist of Korean Job Postings That Fit You
 
-> A human-in-the-loop decision-support workflow that turns a repetitive 2–3 hour daily job search into an approximately 15-minute review process.
+> Looking for something lighter? [jd-fit-screener](https://github.com/kellychiu00718/jd-fit-screener) is a Claude skill that does the JD-fit scoring without scrapers, API keys or scheduling.
 
-**Typical run:** job postings screened across 4 Korean job platforms (an earlier five-source version screened about 200 per run) → deduplicated and evaluated against full JD content → up to 10 prioritized roles delivered by email.
+A personal workflow that collects postings from four Korean job platforms, has an LLM score each full job description against my profile, and emails me up to 10 roles to review. Daily search and first-pass screening went from about 2 to 3 hours to about 15 minutes.
 
-**Stack:** Python · SQL / SQLite · Anthropic API · Claude Code · Requests / BeautifulSoup · Tavily · Gmail SMTP · launchd · GitHub Actions
+## Problem
+Checking several Korean job platforms by hand took me roughly 2 to 3 hours a day. Searching by job title also missed the point. The same work appears under different titles, so the question I needed answered was whether the actual JD matches what I can do.
 
-> **Looking for something lighter?** [jd-fit-screener](https://github.com/kellychiu00718/jd-fit-screener) is a Claude skill that does the JD-fit scoring without scrapers, API keys or scheduling.
+I wanted a repeatable process that searches broadly, scores the real JD content against a structured profile, keeps fit separate from my preferences, and shows me only a few roles worth reading.
 
-> **For recruiters:** this README contains the complete project story. [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) is an optional technical deep dive.
+## My role
+I defined the problem, the workflow, my capability profile (skills, evidence, target roles, experience limits and low-fit work), the decision logic, the expected outputs and the quality checks, and I set the iteration priorities. The final decision to apply is mine.
 
----
+I used Claude Code for the architecture, the multi-file Python code, debugging, tests, refactoring, Git, GitHub Actions and documentation, so I did not write every line myself. ChatGPT helped me think through the problem and review the design; this repository does not call it.
 
-## 1. Why I Built This
+## Data
+Postings from four platforms:
 
-My original job-search workflow had two recurring problems:
+| Source | Collection method |
+|---|---|
+| Saramin | Official Open API |
+| Incruit | HTTP request and HTML parsing |
+| JobKorea | HTTP request and HTML parsing |
+| Wanted | Public jobs endpoint with HTML fallback |
 
-1. **Search cost:** manually checking multiple Korean job platforms took roughly **2–3 hours per day**.
-2. **Decision ambiguity:** relevant work was often hidden behind different job titles, so title-based search did not answer the more important question: **“Does the actual JD match what I can do?”**
+Job and run data are stored in a local SQLite database and are not published. Check each site's terms and robots rules before running the HTML collectors. An earlier version also collected from LinkedIn; I removed that collector.
 
-The goal was therefore not to collect as many jobs as possible. It was to create a repeatable decision process that could:
+## Tools
+- Python (requests, BeautifulSoup) for collection and processing.
+- SQLite with SQL views for storage and analytics.
+- Anthropic API for the fit score and positioning advice on shortlisted JDs.
+- Tavily for an optional company-type check.
+- Gmail SMTP for the daily email.
+- launchd for the local schedule, and a manual GitHub Actions workflow as a cloud backup.
+- Claude Code for development.
 
-- search broadly across multiple platforms,
-- evaluate actual JD content against a structured capability profile,
-- separate **job fit** from **personal preference / freshness**,
-- reduce duplicate and low-value review,
-- surface only a small number of actionable opportunities,
-- retain data so the workflow itself could be analyzed over time.
-
----
-
-## 2. What I Built
-
+## Process
 ```mermaid
 flowchart LR
     A[4 Job Sources] --> B[Collect & Normalize]
@@ -54,257 +58,59 @@ flowchart LR
     O --> P[CSV Reporting]
 ```
 
-### Sources
+1. Collect and normalize postings from each source. A source that fails is logged and skipped, so one broken site does not stop the run.
+2. Remove duplicates within a platform by source ID, then across platforms by normalized company and title.
+3. Filter by recency (30 days) and classify the company type, with a confidence value.
+4. Prefilter by keyword so the LLM only reads postings that have a chance of fitting.
+5. Score fit. The LLM reads the full JD and my structured profile and returns a fit score.
+6. Rank. Freshness and verified company-type preference are added after the fit score, for ordering only.
+7. Review. At most 10 roles go to me by email. Every posting and every run is saved in SQLite.
 
-| Source | Current collection method |
+Monitoring. Each run records jobs collected, new jobs, prefilter passes, jobs recommended, API cost, duration and errors in a `pipeline_runs` table. Together with failure alerts, this tells me whether the pipeline ran, whether it produced data, whether a source returned nothing, and whether the email failed. Collectors retry on errors, and zero-result runs raise a warning. The GitHub Actions cron is disabled; I trigger the workflow by hand when I need the cloud backup, partly to control API cost.
+
+SQL layer. SQL lives in separate schema, query and view files.
+
+| View | Question it answers |
 |---|---|
-| Saramin | Official Open API |
-| Incruit | HTTP request + HTML parsing |
-| JobKorea | HTTP request + HTML parsing |
-| Wanted | Public jobs endpoint with HTML fallback |
-
-The pipeline is designed to degrade gracefully: source-level failures are logged rather than stopping the entire run.
-
----
-
-## 3. How I Turned an Ambiguous Question into a Decision System
-
-The original question — **“Which jobs should I apply to?”** — was too vague to automate directly.
-
-I decomposed it into separate decision layers:
-
-### A. Candidate representation
-My project and work experience were first converted into a structured Markdown/YAML capability profile containing:
-
-- demonstrated skills,
-- quantified evidence,
-- target role patterns,
-- experience constraints,
-- negative / low-fit work patterns.
-
-### B. JD-content matching
-The LLM is explicitly instructed to evaluate the **actual responsibilities and requirements in the JD**, not the job title.
-
-This matters because similar work can appear under titles such as:
-
-- Solutions Consultant
-- Implementation / Customer Success
-- Technical Sales
-- Business / Data Analyst
-- Product / Operations roles
-
-### C. Separate fit from priority
-The system treats two questions differently:
-
-- **JD fit:** “How well does my demonstrated experience match this work?”
-- **Application priority:** “Among comparable jobs, which should I review first?”
-
-The LLM produces the fit score. Freshness and verified company-type preferences are added only afterward for ranking, so preference does not redefine qualification.
-
-### D. Human-in-the-loop final decision
-The system intentionally returns **no more than 10** recommendations per run.
-
-The bottleneck is not information supply; it is the time required to inspect a JD, tailor a resume, and decide whether to apply. The workflow therefore optimizes for **actionable decision quality rather than recommendation volume**.
-
----
-
-## 4. SQL as the Data & Analytics Layer
-
-The current version uses **SQLite as a persistent data layer**, with SQL separated into reusable schema, query, and analytical-view files rather than being limited to ad-hoc Python strings.
-
-### Operational tables
-
-- `seen_jobs` — job-level history, fit scores, ranking information, company classification, first / last seen timestamps
-- `pipeline_runs` — run-level metrics such as jobs scraped, new jobs, prefilter count, recommendations, API cost, errors, and duration
-- `company_cache` — cached company-type classifications and confidence
-
-### Analytical SQL views
-
-| SQL view | Analytical question |
-|---|---|
-| `v_daily_stats` | How did each pipeline run perform? |
-| `v_weekly_health` | Is the workflow operating normally over the last 7 days? |
-| `v_weekly_source` | Which source produces more useful / higher-fit jobs? |
-| `v_weekly_trends` | How are job supply, recommendations, and average fit changing week over week? |
-| `v_weekly_company_type` | How do company segments differ in volume and fit? |
-| `v_weekly_experience` | What experience requirements appear in the market? |
-| `v_cross_platform` | Which postings appear across multiple platforms? |
-| `v_recommendations_today` | What should be reviewed today? |
-
-A Sunday reporting job exports weekly datasets for analysis, including source quality, role-family match, company type, experience range, skill mentions, health metrics, and week-over-week trends.
-
----
-
-## 5. Operational Heartbeat & Reliability
-
-I use **`pipeline_runs` + failure notifications as the operational heartbeat** rather than running a separate heartbeat service.
-
-Each completed run records:
-
-- jobs scraped,
-- new jobs,
-- prefilter passes,
-- jobs recommended,
-- API cost,
-- run duration,
-- source / processing errors.
-
-This lets me answer four practical questions:
-
-1. **Did the pipeline run?**
-2. **Did it actually produce data?**
-3. **Did any source fail or return zero results?**
-4. **Did report delivery fail?**
-
-Reliability measures currently include:
-
-- scraper retry logic,
-- zero-result warnings,
-- pipeline exception alerts,
-- email-delivery failure alerts,
-- local scheduled execution through `launchd`,
-- GitHub Actions as a **manual cloud backup / recovery path**,
-- credentials stored through `.env` locally and GitHub Secrets in the cloud workflow.
-
-The GitHub Actions cron is intentionally disabled in the current public version; the workflow is triggered manually when cloud execution is needed, partly to control API usage and cost.
-
----
-
-## 6. How AI Is Used
-
-This project distinguishes **development-time AI assistance** from **runtime AI evaluation**.
-
-### Claude Code — development partner
-I used Claude Code for:
-
-- system architecture,
-- multi-file Python implementation,
-- debugging,
-- testing,
-- refactoring,
-- Git workflow,
-- GitHub Actions configuration,
-- documentation.
-
-I did **not** manually author every line of Python from scratch. My ownership was primarily in defining:
-
-- the problem,
-- workflow requirements,
-- candidate evidence,
-- decision logic,
-- expected outputs,
-- quality checks,
-- iteration priorities.
-
-### Anthropic API — runtime JD evaluation
-The pipeline sends shortlisted JD content plus the structured candidate profile to Claude for content-based fit evaluation and positioning advice.
-
-### ChatGPT — problem framing and iteration
-ChatGPT was used conversationally during problem framing, workflow design, and review. It is **not** called as a runtime API by this repository.
-
-The final application decision remains human-owned.
-
----
-
-## 7. Iteration: What Changed After the First Pilot
-
-The first version proved that a script could run, but it also exposed problems that required redesign rather than simple prompt editing.
-
-### Problem 1 — manual execution was not the same as automation
-A successful manual run did not guarantee that the workflow would execute unattended.
-
-**Change:** added local `launchd` scheduling, execution logs, failure email alerts, and a GitHub Actions backup path.
-
-### Problem 2 — duplicate postings across platforms distorted review
-Source-level IDs prevent duplicates within a platform, but the same job may appear on several sites.
-
-**Change:** added canonical normalization of company + title and cross-platform merging before matching.
-
-### Problem 3 — preference could be confused with qualification
-A preferred employer should not appear to be a better skill match simply because it is preferred.
-
-**Change:** kept the LLM JD-fit score separate from freshness and company-type ranking bonuses. Company bonuses are only applied when the classification has some supporting confidence.
-
-### Problem 4 — one-off outputs could not support improvement
-Daily email results alone were difficult to analyze historically.
-
-**Change:** moved job and run data into SQLite and added reusable SQL views plus weekly analytical exports.
-
-These iterations shifted the project from a one-off automation script toward an **observable decision-support pipeline**.
-
----
-
-## 8. Current Outcome
-
-- Screens postings from four job sources in a typical run (an earlier five-source version screened about 200).
-- Surfaces **up to 10** prioritized roles for final review.
-- Reduces daily search and first-pass screening from approximately **2–3 hours to ~15 minutes**.
-- Maintains historical job and run data in SQLite instead of discarding each day’s results.
-- Generates daily and weekly SQL-based analytics for source quality, match patterns, market trends, and pipeline health.
-- Delivers the shortlist automatically by Gmail SMTP.
-
-This is a **pilot-stage personal system**, not a production SaaS product. The value of the project is in the problem decomposition, analytical design, AI-assisted implementation, measurement, and iteration process.
-
----
-
-## 9. What This Project Demonstrates
-
-| Capability | Evidence |
-|---|---|
-| **Problem decomposition** | Converted “Which jobs should I apply to?” into candidate representation, JD fit, freshness, source quality, and ranking logic |
-| **Data-driven decision support** | Broad collection → filtered / scored data → <=10 actionable recommendations |
-| **SQL analysis** | Persistent SQLite data model, externalized SQL queries / views, daily and weekly KPI reporting |
-| **Issue & improvement identification** | Pilot failures led to scheduling, canonical dedup, ranking separation, and analytics redesign |
-| **AI-tool utilization** | Claude Code for repo-level implementation; Anthropic API for JD analysis; ChatGPT for problem framing |
-| **End-to-end ownership** | Requirements → collection → analysis → ranking → report delivery → monitoring → iteration |
-| **Operational monitoring** | `pipeline_runs`, retry behavior, zero-result warnings, delivery alerts, cloud backup workflow |
-| **Resource prioritization** | Limits final recommendations and API spend rather than maximizing volume |
-
----
-
-## 10. Current Limitations & Next Iteration
-
-I keep the limitations visible rather than presenting the workflow as more mature than it is:
-
-- Some sources provide incomplete or inconsistent original posting dates. When a reliable posted date is unavailable, the current code can fall back to discovery time for freshness calculations; improving original-date confidence is a next data-quality step.
-- Experience requirements are partly represented through source filters, keywords, and the LLM evaluation rather than one universal deterministic hard-gate parser across every platform.
-- Cross-platform deduplication currently normalizes **company + title**; official requisition IDs / canonical ATS URLs would be stronger where available.
-- Company classification combines pattern matching, optional Tavily verification, and a confidence field; unverified classifications do not receive a ranking bonus.
-- The SQL reporting layer is complete enough for weekly analysis; the next visualization layer is a compact **Tableau dashboard** for decision visibility rather than adding charts for their own sake.
-
-### Planned Tableau views
-
-1. **Executive Funnel** — scraped → new → prefilter → recommended
-2. **Source & Fit Analysis** — source yield, average fit, role-family and company-type patterns
-3. **Pipeline Health** — run duration, API cost, error runs, recommendation rate
-
----
-
-## 11. Repository Guide
-
-```text
-.
-├── main.py                    # End-to-end orchestration
-├── scrapers/                  # Four source collectors
-├── processors/                # Matching, canonical dedup, company classification, enrichment
-├── sql/
-│   ├── schema/                # SQLite tables / migrations
-│   ├── queries/               # Reusable operational queries
-│   └── views/                 # Analytical views for daily / weekly reporting
-├── output/                    # Email, CSV, weekly reporting
-├── config/                    # Search and candidate-profile configuration
-├── .github/workflows/         # Manual cloud backup workflow
-└── docs/                      # Design decisions deep dive
-```
-
-Supporting documentation:
-
-- [Design Decisions](docs/DESIGN_DECISIONS.md)
-
----
-
-## 12. Running Locally
-
+| `v_daily_stats` | How did each run perform? |
+| `v_weekly_health` | Is the workflow healthy over the last 7 days? |
+| `v_weekly_source` | Which source gives more useful, higher-fit jobs? |
+| `v_weekly_trends` | How do job supply, recommendations and average fit change week over week? |
+| `v_weekly_company_type` | How do company types differ in volume and fit? |
+| `v_weekly_experience` | What experience levels does the market ask for? |
+| `v_cross_platform` | Which postings appear on several platforms? |
+| `v_recommendations_today` | What should I review today? |
+
+A Sunday job exports weekly datasets for source quality, role-family match, company type, experience range, skill mentions, health metrics and week-over-week trends.
+
+## Key insights
+1. **Match the JD, not the title.** The LLM is told to judge the responsibilities and requirements in the posting. Titles are only used for discovery and prefiltering. Similar work shows up as Solutions Consultant, Customer Success, Technical Sales or Business Analyst.
+2. **Fit and priority are two questions.** Fit asks how well my demonstrated experience matches the work. Priority asks which of several comparable jobs to read first. A preferred employer should not look like a better skill match, so preference never changes the LLM's fit score.
+3. **A short list beats a long one.** What limits me is the time to read a JD, tailor a resume and decide, so the system returns at most 10 roles.
+4. **Keep the history.** Saving every posting and run in SQLite let me analyze the workflow itself, such as which source produces better fits.
+
+## Business impact
+This is a personal tool, and the result is my own.
+- Daily search and first-pass screening fell from about 2 to 3 hours to about 15 minutes.
+- Up to 10 prioritized roles reach me each day. An earlier five-source version screened about 200 postings per run; the current four-source version screens fewer.
+- Daily and weekly SQL reports cover source quality, match patterns, market trends and pipeline health.
+
+It is a pilot-stage personal system, not a product.
+
+## Challenges and learnings
+- **A script that worked by hand did not always work unattended.** I added launchd scheduling, execution logs, failure emails and a cloud backup path.
+- Duplicates across platforms distorted my review. Source IDs only prevent duplicates within one platform, so I added canonical matching on company and title before scoring.
+- Preference looked like qualification. I split the LLM fit score from the ranking bonuses, and company bonuses apply only when the classification has supporting confidence.
+- One-off emails could not support improvement. Moving the data into SQLite with reusable views made weekly analysis possible.
+
+Known limits:
+- Some sources give no reliable posting date. Freshness can then fall back to the time I first saw the posting.
+- Experience requirements are handled through source filters, keywords and the LLM, not one hard-gate parser for every platform.
+- Duplicates are matched on company and title. A requisition ID or canonical ATS URL would be stronger.
+- Company classification mixes pattern matching, optional Tavily verification and a confidence field. Unverified classifications get no ranking bonus.
+- Next step: a small Tableau dashboard for the funnel (collected, new, prefiltered, recommended), source and fit analysis, and pipeline health.
+
+## Run it
 ```bash
 python -m venv venv
 source venv/bin/activate
@@ -312,5 +118,18 @@ pip install -r requirements.txt
 cp .env.example .env
 python main.py
 ```
+The credentials you need depend on which sources and features you enable; they are read from environment variables. Secrets and generated job data are excluded from version control.
 
-Required credentials depend on enabled sources / features and are loaded from environment variables. Secrets and generated job data are excluded from version control.
+```text
+.
+├── main.py                    # End-to-end orchestration
+├── scrapers/                  # Four source collectors
+├── processors/                # Matching, canonical dedup, company classification, enrichment
+├── sql/                       # Schema, reusable queries, analytical views
+├── output/                    # Email, CSV, weekly reporting
+├── config/                    # Search and candidate-profile configuration
+├── .github/workflows/         # Manual cloud backup workflow
+└── docs/                      # Design decisions
+```
+
+More on the design choices: [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md).
