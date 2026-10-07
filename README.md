@@ -7,7 +7,7 @@ A personal workflow that collects postings from four Korean job platforms, has a
 ## Problem
 Checking several Korean job platforms by hand took me roughly 2 to 3 hours a day. Searching by job title also missed the point. The same work appears under different titles, so the question I needed answered was whether the actual JD matches what I can do.
 
-I wanted a repeatable process that searches broadly, scores the real JD content against a structured profile, keeps fit separate from my preferences, and shows me only a few roles worth reading.
+I wanted a repeatable process. It should search broadly and score the real JD content against a structured profile. It should keep fit separate from my preferences. And it should show me only a few roles worth reading.
 
 ## My role
 I defined the problem, the workflow, my capability profile (skills, evidence, target roles, experience limits and low-fit work), the decision logic, the expected outputs and the quality checks, and I set the iteration priorities. The final decision to apply is mine.
@@ -66,7 +66,7 @@ flowchart LR
 6. Rank. Freshness and verified company-type preference are added after the fit score, for ordering only.
 7. Review. At most 10 roles go to me by email. Every posting and every run is saved in SQLite.
 
-Monitoring. Each run records jobs collected, new jobs, prefilter passes, jobs recommended, API cost, duration and errors in a `pipeline_runs` table. Together with failure alerts, this tells me whether the pipeline ran, whether it produced data, whether a source returned nothing, and whether the email failed. Collectors retry on errors, and zero-result runs raise a warning. The GitHub Actions cron is disabled; I trigger the workflow by hand when I need the cloud backup, partly to control API cost.
+Monitoring. Each run records jobs collected, new jobs, prefilter passes, jobs recommended, API cost, duration and errors in a `pipeline_runs` table. Together with failure alerts, this shows whether the pipeline ran, produced data, got nothing from a source, or failed to send the email. Collectors retry on errors, and zero-result runs raise a warning. The GitHub Actions cron is disabled; I trigger the workflow by hand when I need the cloud backup, partly to control API cost.
 
 SQL layer. SQL lives in separate schema, query and view files.
 
@@ -98,7 +98,7 @@ This is a personal tool, and the result is my own.
 It is a pilot-stage personal system, not a product.
 
 ## Challenges and learnings
-- **A script that worked by hand did not always work unattended.** I added launchd scheduling, execution logs, failure emails and a cloud backup path.
+- A script that worked by hand did not always work unattended. I added launchd scheduling, execution logs, failure emails and a cloud backup path.
 - Duplicates across platforms distorted my review. Source IDs only prevent duplicates within one platform, so I added canonical matching on company and title before scoring.
 - Preference looked like qualification. I split the LLM fit score from the ranking bonuses, and company bonuses apply only when the classification has supporting confidence.
 - One-off emails could not support improvement. Moving the data into SQLite with reusable views made weekly analysis possible.

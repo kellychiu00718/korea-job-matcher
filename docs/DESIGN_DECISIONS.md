@@ -1,153 +1,102 @@
 # Design Decisions
 
-The purpose of this document is not to describe every implementation detail. It records the decisions that changed **how the system reasons about the problem**.
+This is not a tour of the code. It lists the decisions that changed how the system thinks about the problem.
 
-## 1. Match the JD, Not the Job Title
+## 1. Match the JD, not the job title
 
-**Problem**  
-The same underlying work may appear under different titles, while similar titles can represent very different responsibilities.
+**Problem.** The same work appears under different titles. Similar titles can hide very different responsibilities.
 
-**Decision**  
-Use title keywords only for discovery / prefiltering. Ask the LLM to evaluate the actual JD responsibilities and requirements when producing the fit score.
+**Decision.** Title keywords are used only for discovery and prefiltering. The LLM judges the responsibilities and requirements in the posting when it gives the fit score.
 
-**Why it matters**  
-The system searches for transferable work patterns instead of overfitting to labels.
-
-**Capability demonstrated:** problem reframing and requirement analysis.
+**Why.** I want roles with similar work, not roles with similar labels.
 
 ---
 
-## 2. Optimize for Actionable Recommendations, Not Maximum Volume
+## 2. Return a short list, not the maximum
 
-**Problem**  
-Finding more jobs is not automatically useful because every shortlisted role still requires human review, resume tailoring, and application time.
+**Problem.** Finding more jobs does not help by itself. Every shortlisted role still costs me review time, resume tailoring and application time.
 
-**Decision**  
-Search broadly but return no more than ten prioritized jobs per run.
+**Decision.** Search broadly, but return at most ten prioritized jobs per run.
 
-**Why it matters**  
-The limiting resource is human attention. The system therefore optimizes for **decision quality per unit of attention**.
-
-**Capability demonstrated:** prioritization under resource constraints.
+**Why.** My attention is the limit, so the system aims for the best decisions per hour I spend reading.
 
 ---
 
-## 3. Use a Cheap Prefilter Before LLM Evaluation
+## 3. Use a cheap prefilter before the LLM
 
-**Problem**  
-Sending every discovered posting to an LLM would increase API cost and latency without improving every decision.
+**Problem.** Sending every posting to an LLM adds API cost and delay, and does not improve every decision.
 
-**Decision**  
-Use deterministic high / medium / negative keyword scoring before LLM evaluation.
+**Decision.** Score postings first with plain keyword lists (high, medium and negative).
 
-**Trade-off**  
-A prefilter can miss relevant jobs that use unfamiliar wording, so it is intentionally a coarse first stage rather than the final fit decision.
-
-**Capability demonstrated:** cost / quality trade-off and staged decision design.
+**Trade-off.** A prefilter can miss relevant jobs that use unfamiliar wording. It is a coarse first cut, not the fit decision.
 
 ---
 
-## 4. Separate Qualification from Preference
+## 4. Keep qualification and preference apart
 
-**Problem**  
-A preferred employer should not appear to be a stronger skills match simply because the candidate prefers that company type.
+**Problem.** A company I prefer should not look like a better skill match just because I prefer it.
 
-**Decision**  
-Keep the LLM-generated JD-fit score separate. Freshness and company-type preference are added later only for ranking.
+**Decision.** The LLM's JD-fit score stays untouched. Freshness and company-type preference are added later, only for ranking.
 
-**Additional guardrail**  
-Company-type bonus is only applied when the classification has at least some supporting confidence; `unverified` classifications receive no bonus.
-
-**Capability demonstrated:** metric definition and bias control.
+**Guardrail.** The company-type bonus applies only when the classification has some supporting confidence. Classifications marked `unverified` get no bonus.
 
 ---
 
-## 5. Add Cross-Platform Canonical Deduplication
+## 5. Merge duplicates across platforms
 
-**Problem**  
-Source IDs only solve duplicates within one platform. The same company-role combination can appear on JobKorea, Saramin, or other sources simultaneously.
+**Problem.** Source IDs only catch duplicates within one platform. The same company and role can appear on JobKorea and Saramin at the same time.
 
-**Decision**  
-Normalize company + title and merge likely cross-platform duplicates before expensive evaluation.
+**Decision.** Normalize company and title, and merge likely duplicates before the expensive LLM step.
 
-**Trade-off**  
-This is a heuristic. Official requisition IDs / ATS URLs would produce stronger identity resolution, so the current approach is documented rather than overstated.
-
-**Capability demonstrated:** data quality and entity-resolution thinking.
+**Trade-off.** This is a heuristic. A requisition ID or ATS URL would identify a posting more reliably, so the README says the current method is a heuristic.
 
 ---
 
-## 6. Persist Data Instead of Treating Every Run as Disposable
+## 6. Keep the history
 
-**Problem**  
-A daily email answers “what should I inspect today?” but cannot answer questions such as:
+**Problem.** A daily email says what to read today. It cannot say which source gives better-fit jobs, whether the number of recommendations is changing, which role families keep scoring well, or whether the pipeline is getting slower or more expensive.
 
-- Which source is producing better-fit jobs?
-- Is recommendation yield changing?
-- Which role families repeatedly score well?
-- Is the pipeline becoming slower or more expensive?
+**Decision.** Store job and run history in SQLite, and build reusable SQL views for daily and weekly analysis.
 
-**Decision**  
-Move job and run history into SQLite and create reusable SQL views for daily and weekly analytics.
-
-**Why it matters**  
-This turns the workflow from a one-off automation script into an analyzable process.
-
-**Capability demonstrated:** data modeling and closed-loop improvement.
+**Why.** The workflow stops being a one-off script and becomes something I can analyze.
 
 ---
 
-## 7. Externalize SQL
+## 7. Keep SQL out of the Python code
 
-**Problem**  
-Keeping every query embedded inside Python makes analytical logic harder to inspect and reuse.
+**Problem.** Queries embedded in Python are hard to read and hard to reuse.
 
-**Decision**  
-Separate schema, operational queries, and analytical views under `sql/` and load them through `sql/loader.py`.
+**Decision.** Schema, operational queries and analytical views live under `sql/`, and `sql/loader.py` loads them.
 
-**Why it matters**  
-SQL becomes a first-class analytical layer rather than a hidden implementation detail.
-
-**Capability demonstrated:** query organization and maintainability.
+**Why.** SQL is part of the analysis, so it should be easy to find and read.
 
 ---
 
-## 8. Treat Run Logs + Failure Alerts as the Operational Heartbeat
+## 8. Use run logs and failure alerts as the heartbeat
 
-**Problem**  
-A workflow that “usually works” is not sufficient when it is supposed to run unattended.
+**Problem.** A workflow that usually works is not good enough when it runs without me.
 
-**Decision**  
-Use `pipeline_runs` as the run-level health record and pair it with email alerts for crashes / delivery failure plus source zero-result logging.
+**Decision.** `pipeline_runs` records the health of each run. Email alerts cover crashes and delivery failures, and sources that return zero results are logged.
 
-**Why not build a separate heartbeat service?**  
-For a small personal system, a dedicated monitoring service would add complexity without materially improving the decision need. The practical questions are whether the run occurred, whether it produced data, whether sources failed, and whether delivery succeeded.
-
-**Capability demonstrated:** proportionate monitoring design.
+**Why not a separate heartbeat service?** For a small personal system it adds complexity and little else. I only need to know four things: did the run happen, did it produce data, did a source fail, and did the email arrive.
 
 ---
 
-## 9. Keep Local Execution Primary and GitHub Actions as Backup
+## 9. Run locally first, with GitHub Actions as backup
 
-**Problem**  
-The first pilot showed that successful manual execution did not guarantee scheduled execution. At the same time, always-on cloud execution was unnecessary for this personal workflow and could increase external API usage.
+**Problem.** In the first pilot, a run that worked by hand did not always work on schedule. An always-on cloud run was also unnecessary for a personal workflow, and it could raise external API usage.
 
-**Decision**  
-Use macOS `launchd` as the primary scheduler and maintain GitHub Actions as a manual backup / recovery path.
-
-**Capability demonstrated:** reliability / cost trade-off.
+**Decision.** macOS `launchd` is the main scheduler. GitHub Actions stays as a manual backup and recovery path.
 
 ---
 
-## 10. Be Explicit About Uncertainty
+## 10. Say what is uncertain
 
-The system currently retains several imperfect signals:
+The system still keeps several imperfect signals:
 
-- some sources do not expose reliable original posting dates,
-- company classification may be verified, pattern-matched, or unverified,
-- experience requirements are not normalized into one deterministic parser across every source,
-- cross-platform identity is based on normalized company + title rather than universal requisition IDs.
+- Some sources do not give a reliable original posting date.
+- Company classification can be verified, pattern-matched or unverified.
+- Experience requirements are not turned into one hard rule across every source.
+- Cross-platform identity relies on normalized company and title, not a universal requisition ID.
 
-Rather than hiding these limitations, the data model includes confidence fields and the documentation states where heuristics remain.
-
-**Capability demonstrated:** responsible analytical judgment.
+The data model has confidence fields, and the documentation says where heuristics remain.
