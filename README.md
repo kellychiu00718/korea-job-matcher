@@ -6,6 +6,8 @@
 
 **Stack:** Python · SQL / SQLite · Anthropic API · Claude Code · Requests / BeautifulSoup · Tavily · Gmail SMTP · launchd · GitHub Actions
 
+> **Looking for something lighter?** [jd-fit-screener](https://github.com/kellychiu00718/jd-fit-screener) is a Claude skill that does the JD-fit scoring without scrapers, API keys or scheduling.
+
 > **For recruiters:** this README contains the complete project story. [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) is an optional technical deep dive.
 
 ---
