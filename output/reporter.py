@@ -39,7 +39,7 @@ def build_email_summary(recommendations: List[Job], total_new: int,
     lines.extend([
         "",
         "詳細資訊請見附件 CSV 或 Tableau 儀表板。",
-        "— Korea Daily Job Shortlist",
+        "— Korea Job Matcher",
     ])
 
     return "\n".join(lines)

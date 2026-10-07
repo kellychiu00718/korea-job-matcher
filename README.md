@@ -1,8 +1,8 @@
-# Korea Daily Job Shortlist: AI-Assisted Job Matching for Korean Job Boards
+# Korea Job Matcher: A Daily AI Shortlist of Korean Job Postings That Fit You
 
 > A human-in-the-loop decision-support workflow that turns a repetitive 2–3 hour daily job search into an approximately 15-minute review process.
 
-**Typical run:** job postings screened across 4 Korean job platforms (an earlier five-source version screened about 200 a day) → deduplicated and evaluated against full JD content → up to 10 prioritized roles delivered by email.
+**Typical run:** job postings screened across 4 Korean job platforms (an earlier five-source version screened about 200 per run) → deduplicated and evaluated against full JD content → up to 10 prioritized roles delivered by email.
 
 **Stack:** Python · SQL / SQLite · Anthropic API · Claude Code · Requests / BeautifulSoup · Tavily · Gmail SMTP · launchd · GitHub Actions
 

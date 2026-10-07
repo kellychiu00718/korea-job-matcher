@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Korea Daily Job Shortlist — daily automated job matching for Korean job boards.
+Korea Job Matcher — daily automated job matching for Korean job boards.
 
 Scrapes 4 platforms → dedup → canonical merge → age cutoff → company classify
 → keyword filter → AI match → enrich → SQLite → CSV → email.
