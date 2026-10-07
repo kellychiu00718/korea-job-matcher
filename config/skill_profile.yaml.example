@@ -1,0 +1,67 @@
+positioning: >
+  [Your degree] graduate with [relevant research/work experience].
+  Trilingual: [Language 1] (native), [Language 2] (proficient), [Language 3] (proficient).
+  Core strength: [your unique value proposition].
+
+high_match_keywords:
+  - technical sales
+  - solutions consultant
+  - consultant
+  - customer success
+  - business development
+  - data analy
+  - NLP
+  - LLM
+  - pre-sales
+  - Python
+  - SQL
+
+medium_match_keywords:
+  - global
+  - multinational
+  - B2B
+  - SaaS
+  - marketing
+  - research
+  - insight
+
+negative_keywords:
+  - senior
+  - full-stack
+  - backend developer
+  - frontend developer
+  - DevOps
+  - SRE
+
+company_type_priority:
+  - 외국계
+  - 대기업
+  - 스타트업
+  - 일반
+
+experience_preference:
+  ideal_max_years: 2
+  acceptable_max_years: 5
+  fresh_grad: true
+
+skill_summary_for_ai: |
+  [Your Name] — [Degree and University], [Graduation Year]
+
+  Core capabilities:
+  1. [Capability 1 with evidence]
+  2. [Capability 2 with evidence]
+  3. [Capability 3 with evidence]
+  4. [Language skills]
+
+  Technical skills:
+  - Python, R, SQL, etc.
+
+  Key achievements:
+  - [Achievement 1 with metrics]
+  - [Achievement 2 with metrics]
+
+  Target roles: [list target role types]
+  Not a fit for: [list exclusions]
+  Job search status: [status]
+  Target salary: [range]
+  Work location: [preference]

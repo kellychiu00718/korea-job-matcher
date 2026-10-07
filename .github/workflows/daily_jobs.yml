@@ -1,0 +1,63 @@
+name: Daily Job Pipeline
+
+on:
+  # schedule:
+  #   # UTC 00:00 = KST 09:00
+  #   - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          SARAMIN_API_KEY: ${{ secrets.SARAMIN_API_KEY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python main.py
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-report-${{ github.run_number }}
+          path: |
+            data/exports/*.csv
+            data/exports/weekly/*.csv
+          retention-days: 30
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python3 -c "
+          import smtplib, os
+          from email.mime.text import MIMEText
+          addr = os.environ['GMAIL_ADDRESS']
+          pwd = os.environ['GMAIL_APP_PASSWORD']
+          msg = MIMEText('Job pipeline GitHub Actions run failed.\nCheck: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}')
+          msg['Subject'] = '[Job Pipeline ALERT] GitHub Actions failed'
+          msg['From'] = addr
+          msg['To'] = addr
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as s:
+              s.login(addr, pwd)
+              s.sendmail(addr, addr, msg.as_string())
+          "

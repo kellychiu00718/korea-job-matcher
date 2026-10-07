@@ -1,0 +1,49 @@
+pipeline:
+  max_daily_recommendations: 10
+  max_jobs_per_source: 50
+  match_threshold_for_enrichment: 70
+  days_lookback: 30
+  request_delay_seconds: 2.5
+  max_retries: 3
+
+search_keywords:
+  korean:
+    - 기술영업
+    - 솔루션 컨설턴트
+    - AI 컨설턴트
+    - 사업개발
+    - 고객성공
+    - UX 리서처
+    - 데이터 분석
+    - 컨설턴트
+    - 기술지원
+    - 프로덕트 마케팅
+    - BD
+  english:
+    - Technical Sales
+    - Solutions Consultant
+    - AI Consultant
+    - Business Development
+    - Customer Success
+    - UX Researcher
+
+filters:
+  experience_max_years: 5
+  location: South Korea
+  location_korean: 전국
+
+email:
+  recipient: ""
+  subject_prefix: "[Job Shortlist]"
+
+ai:
+  model: claude-haiku-4-5-20251001
+  max_tokens_match: 500
+  max_tokens_enrich: 1500
+  max_tokens_message: 800
+
+risk_management:
+  zero_result_alert: true
+  ip_block_cooldown_minutes: 30
+  daily_api_budget_usd: 0.50
+  max_consecutive_failures: 3

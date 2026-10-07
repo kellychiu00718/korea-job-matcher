@@ -1,0 +1,16 @@
+.env
+data/jobs.db
+data/jobs.db-journal
+data/jobs.db-wal
+data/jobs.db-shm
+data/reports/
+data/exports/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+config/skill_profile.yaml
+run_pipeline.sh
+setup.sh
+*.plist

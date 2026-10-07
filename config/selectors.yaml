@@ -1,0 +1,26 @@
+incruit:
+  search_url: "https://search.incruit.com/list/search.asp"
+  list:
+    container: "div.c_col"
+    item: "li"
+    title: "a.job-link"
+    company: "span.company-name"
+    link: "a.job-link"
+    date: "span.date"
+    experience: "span.exp"
+  detail:
+    description: "div.job-detail-content"
+
+jobkorea:
+  search_url: "https://www.jobkorea.co.kr/Search/"
+  list:
+    container: "div.recruit-info"
+    item: "li"
+    title: "a.title.dev_view"
+    company: "a.name.dev_view"
+    link: "a.title.dev_view"
+    experience: "span.exp"
+    location: "span.loc.long"
+    date: "span.date"
+  detail:
+    description: "div.tbRow"
